@@ -91,15 +91,62 @@ async function run() {
       res.json(products);
     });
     app.post("/api/products", async (req, res) => {
-  try {
-    const productData = req.body;
-    const result = await productsCollection.insertOne(productData);
-    res.json({ success: true, productId: result.insertedId });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: "Server Error" });
-  }
-});
+      try {
+        const productData = req.body;
+        const result = await productsCollection.insertOne(productData);
+        res.json({ success: true, productId: result.insertedId });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: "Server Error" });
+      }
+    });
+    app.delete("/api/products/:id", async (req, res) => {
+      const { id } = req.params;
+
+      if (!ObjectId.isValid(id)) {
+        return res.status(400).json({ success: false, message: "Invalid product ID" });
+      }
+
+      try {
+        const result = await productsCollection.deleteOne({ _id: new ObjectId(id) });
+
+        if (result.deletedCount === 1) {
+          res.json({ success: true, message: "Product deleted successfully" });
+        } else {
+          res.status(404).json({ success: false, message: "Product not found" });
+        }
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: "Failed to delete product" });
+      }
+    });
+
+    app.put("/api/products/:id", async (req, res) => {
+      const { id } = req.params;
+      const { name, price, category } = req.body;
+
+      if (!ObjectId.isValid(id)) {
+        return res.status(400).json({ success: false, message: "Invalid product ID" });
+      }
+
+      try {
+        const result = await productsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { name, price: Number(price), category } }
+        );
+
+        if (result.modifiedCount > 0) {
+          res.json({ success: true, message: "Product updated successfully" });
+        } else {
+          res.status(404).json({ success: false, message: "Product not found or no changes made" });
+        }
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: "Failed to update product" });
+      }
+    });
+
+
 
 
     // Get all categories
@@ -170,7 +217,7 @@ async function run() {
             todayOrders,
             todaySales: todaySales[0]?.total || 0,
             totalCustomers,
-            completedOrders, 
+            completedOrders,
           },
         });
       } catch (err) {
