@@ -52,10 +52,38 @@ async function run() {
         res.status(500).json({ message: "Server Error" });
       }
     });
- app.get('/users', async(req, res)=>{
-  const result = await usersCollection.find().toArray();
-  res.send(result);
- })
+    app.get('/users', async (req, res) => {
+      const result = await usersCollection.find().toArray();
+      res.send(result);
+    })
+
+    app.get('/users/:email', async (req, res) => {
+      const email = req.params.email;
+      const query = { email: email }
+      const result = await usersCollection.findOne(query);
+      res.send(result)
+    })
+    // PUT - Update user profile
+    app.put("/users/:id", async (req, res) => {
+      const id = req.params.id;
+      const updateData = req.body;
+
+      try {
+        const result = await usersCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: updateData }
+        );
+
+        if (result.modifiedCount > 0) {
+          res.status(200).send({ success: true, message: "Profile updated successfully" });
+        } else {
+          res.status(404).send({ success: false, message: "No changes made or user not found" });
+        }
+      } catch (error) {
+        res.status(500).send({ success: false, message: "Update failed", error });
+      }
+    });
+
 
     // Get all products
     app.get("/api/products", async (req, res) => {
@@ -81,41 +109,6 @@ async function run() {
     });
 
 
-    app.get('/users/:email', async(req, res) =>{
-      const email = req.params.email;
-      const query = {email: email}
-      const result = await usersCollection.findOne(query);
-      res.send(result)
-    })
-// PUT - Update user profile
-app.put("/users/:id", async (req, res) => {
-    const id = req.params.id;
-    const updateData = req.body;
-
-    try {
-        const result = await usersCollection.updateOne(
-            { _id: new ObjectId(id) },
-            { $set: updateData }
-        );
-
-        if (result.modifiedCount > 0) {
-            res.status(200).send({ success: true, message: "Profile updated successfully" });
-        } else {
-            res.status(404).send({ success: false, message: "No changes made or user not found" });
-        }
-    } catch (error) {
-        res.status(500).send({ success: false, message: "Update failed", error });
-    }
-});
-
-
-
-
-
-
-
-
-
     app.post("/api/bookings", async (req, res) => {
       try {
         const bookingData = req.body;
@@ -137,96 +130,119 @@ app.put("/users/:id", async (req, res) => {
     });
 
 
-// Dashboard Stats API
-app.get("/api/admin/stats", async (req, res) => {
-  try {
-    const totalOrders = await bookingsCollection.estimatedDocumentCount();
+    // Dashboard Stats API
+    app.get("/api/admin/stats", async (req, res) => {
+      try {
+        const totalOrders = await bookingsCollection.estimatedDocumentCount();
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
-    const todayOrders = await bookingsCollection.countDocuments({
-      createdAt: { $gte: today },
+        const todayOrders = await bookingsCollection.countDocuments({
+          createdAt: { $gte: today },
+        });
+
+        const todaySales = await bookingsCollection.aggregate([
+          { $match: { createdAt: { $gte: today } } },
+          { $group: { _id: null, total: { $sum: "$totalAmount" } } }
+        ]).toArray();
+
+        const totalCustomers = await usersCollection.estimatedDocumentCount();
+
+        // ✅ Completed Bookings count
+        const completedOrders = await bookingsCollection.countDocuments({ status: "completed" });
+
+        res.json({
+          success: true,
+          stats: {
+            lifetimeOrders: totalOrders,
+            todayOrders,
+            todaySales: todaySales[0]?.total || 0,
+            totalCustomers,
+            completedOrders, 
+          },
+        });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: "Server Error" });
+      }
     });
 
-    const todaySales = await bookingsCollection.aggregate([
-      { $match: { createdAt: { $gte: today } } },
-      { $group: { _id: null, total: { $sum: "$totalAmount" } } }
-    ]).toArray();
 
-    const totalCustomers = await usersCollection.estimatedDocumentCount();
+    // Latest Orders API
+    app.get("/api/admin/latest-orders", async (req, res) => {
+      try {
+        const latestOrders = await bookingsCollection
+          .find({})
+          .sort({ createdAt: -1 })
+          .limit(10)
+          .toArray();
 
-    res.json({
-      success: true,
-      stats: {
-        lifetimeOrders: totalOrders,
-        todayOrders,
-        todaySales: todaySales[0]?.total || 0,
-        totalCustomers,
-      },
+        res.json({ success: true, latestOrders });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: "Server Error" });
+      }
     });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: "Server Error" });
-  }
-});
-
-// Latest Orders API
-app.get("/api/admin/latest-orders", async (req, res) => {
-  try {
-    const latestOrders = await bookingsCollection
-      .find({})
-      .sort({ createdAt: -1 })
-      .limit(10)
-      .toArray();
-
-    res.json({ success: true, latestOrders });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: "Server Error" });
-  }
-});
 
 
 
-// GET all bookings (for admin dashboard)
-app.get("/api/admin/bookings", async (req, res) => {
-  try {
-    const bookings = await bookingsCollection
-      .find({})
-      .sort({ createdAt: -1 })
-      .toArray();
+    // GET all bookings (for admin dashboard)
+    app.get("/api/admin/bookings", async (req, res) => {
+      try {
+        const bookings = await bookingsCollection
+          .find({})
+          .sort({ createdAt: -1 })
+          .toArray();
 
-    res.status(200).json({ success: true, bookings });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: "Server Error" });
-  }
-});
+        res.status(200).json({ success: true, bookings });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: "Server Error" });
+      }
+    });
 
-// DELETE booking by ID
-app.delete("/api/admin/bookings/:id", async (req, res) => {
-  try {
-    const id = req.params.id;
+    // DELETE booking by ID
+    app.delete("/api/admin/bookings/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        if (!ObjectId.isValid(id)) {
+          return res.status(400).json({ success: false, message: "Invalid ID" });
+        }
 
-    // Ensure valid ObjectId
-    if (!ObjectId.isValid(id)) {
-      return res.status(400).json({ success: false, message: "Invalid ID" });
-    }
+        const result = await bookingsCollection.deleteOne({ _id: new ObjectId(id) });
 
-    const result = await bookingsCollection.deleteOne({ _id: new ObjectId(id) });
+        if (result.deletedCount === 1) {
+          res.status(200).json({ success: true, message: "Booking cancelled and deleted" });
+        } else {
+          res.status(404).json({ success: false, message: "Booking not found" });
+        }
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: "Server Error" });
+      }
+    });
 
-    if (result.deletedCount === 1) {
-      res.status(200).json({ success: true, message: "Booking cancelled and deleted" });
-    } else {
-      res.status(404).json({ success: false, message: "Booking not found" });
-    }
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: "Server Error" });
-  }
-});
+    // update booking status
+    app.patch("/api/admin/bookings/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { status } = req.body;
 
+        const result = await bookingsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { status } }
+        );
+
+        if (result.modifiedCount > 0) {
+          res.send({ success: true, message: "Status updated" });
+        } else {
+          res.send({ success: false, message: "Update failed" });
+        }
+      } catch (error) {
+        res.status(500).send({ success: false, message: error.message });
+      }
+    });
 
 
 
