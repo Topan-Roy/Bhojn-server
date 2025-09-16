@@ -90,6 +90,17 @@ async function run() {
       const products = await productsCollection.find().toArray();
       res.json(products);
     });
+    app.post("/api/products", async (req, res) => {
+  try {
+    const productData = req.body;
+    const result = await productsCollection.insertOne(productData);
+    res.json({ success: true, productId: result.insertedId });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server Error" });
+  }
+});
+
 
     // Get all categories
     app.get("/api/categories", async (req, res) => {
