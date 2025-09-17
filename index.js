@@ -37,14 +37,10 @@ async function run() {
     app.post("/api/register", async (req, res) => {
       try {
         const userData = req.body;
-
-        // Check if user already exists
         const existingUser = await usersCollection.findOne({ email: userData.email });
         if (existingUser) {
           return res.status(400).json({ message: "User already exists" });
         }
-
-        // Insert new user
         const result = await usersCollection.insertOne(userData);
         res.status(201).json({ message: "User registered successfully", userId: result.insertedId });
       } catch (err) {
@@ -147,14 +143,82 @@ async function run() {
     });
 
 
-
-
     // Get all categories
     app.get("/api/categories", async (req, res) => {
       const categories = await categoriesCollection.find().toArray();
       res.json(categories);
     });
 
+    // POST: Add new category (only name)
+    app.post("/api/categories", async (req, res) => {
+      try {
+        const { name, parentCategory, offer, status, image } = req.body;
+
+        if (!name || !name.trim()) {
+          return res.status(400).json({ success: false, message: "Category name is required" });
+        }
+
+        const existing = await categoriesCollection.findOne({ name: name.trim() });
+        if (existing) {
+          return res.status(400).json({ success: false, message: "Category already exists" });
+        }
+        const newCategory = {
+          name: name.trim(),
+          parentCategory: parentCategory || "",
+          offer: offer || false,
+          status: status || "Active",
+          image: image || "",
+          createdAt: new Date(),
+        };
+
+        const result = await categoriesCollection.insertOne(newCategory);
+
+        res.status(201).json({ success: true, categoryId: result.insertedId, category: newCategory });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: "Server Error" });
+      }
+    });
+
+    // 2️⃣ Update category
+    app.put("/api/categories/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+        const updateData = req.body;
+
+        const result = await categoriesCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: updateData }
+        );
+
+        if (result.matchedCount === 0) {
+          return res.status(404).json({ success: false, message: "Category not found" });
+        }
+
+        res.json({ success: true, message: "Category updated successfully" });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: "Server error" });
+      }
+    });
+
+    // 3️⃣ Delete category
+    app.delete("/api/categories/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+
+        const result = await categoriesCollection.deleteOne({ _id: new ObjectId(id) });
+
+        if (result.deletedCount === 0) {
+          return res.status(404).json({ success: false, message: "Category not found" });
+        }
+
+        res.json({ success: true, message: "Category deleted successfully" });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: "Server error" });
+      }
+    });
     // GET all bookings
     app.get("/api/bookings", async (req, res) => {
       try {
@@ -165,7 +229,6 @@ async function run() {
         res.status(500).json({ success: false, message: "Server Error" });
       }
     });
-
 
     app.post("/api/bookings", async (req, res) => {
       try {
@@ -206,8 +269,6 @@ async function run() {
         ]).toArray();
 
         const totalCustomers = await usersCollection.estimatedDocumentCount();
-
-        // ✅ Completed Bookings count
         const completedOrders = await bookingsCollection.countDocuments({ status: "completed" });
 
         res.json({
@@ -301,8 +362,6 @@ async function run() {
         res.status(500).send({ success: false, message: error.message });
       }
     });
-
-
 
 
 
