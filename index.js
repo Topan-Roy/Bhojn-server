@@ -33,6 +33,7 @@ async function run() {
     const productsCollection = db.collection("products");
     const categoriesCollection = db.collection("categories");
     const bookingsCollection = db.collection("bookings");
+    const purchasesCollection = db.collection("purchases");
     // ✅ Register Route
     app.post("/api/register", async (req, res) => {
       try {
@@ -59,13 +60,13 @@ async function run() {
       const result = await usersCollection.findOne(query);
       res.send(result)
     })
-    
-       // user role get by email
-app.get("/users/:email", async (req, res) => {
-  const email = req.params.email;
-  const user = await usersCollection.findOne({ email: email });
-  res.send(user || {});
-});
+
+    // user role get by email
+    app.get("/users/:email", async (req, res) => {
+      const email = req.params.email;
+      const user = await usersCollection.findOne({ email: email });
+      res.send(user || {});
+    });
     // Get all users
     app.get("/api/admin/users", async (req, res) => {
       try {
@@ -121,7 +122,86 @@ app.get("/users/:email", async (req, res) => {
       }
     });
 
- 
+    // POST - Create Purchase
+    app.post("/purchases", async (req, res) => {
+      try {
+        const purchase = req.body;
+        const result = await purchasesCollection.insertOne(purchase);
+        res.status(201).send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to create purchase", error });
+      }
+    });
+
+    // GET - All Purchases
+    app.get("/purchases", async (req, res) => {
+      try {
+        const result = await purchasesCollection.find().toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to fetch purchases", error });
+      }
+    });
+
+    // GET - Single Purchase by ID
+    app.get("/purchases/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const result = await purchasesCollection.findOne({ _id: new ObjectId(id) });
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to fetch purchase", error });
+      }
+    });
+
+    // PUT - Update Purchase
+    app.put("/purchases/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const data = req.body;
+        const result = await purchasesCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: data }
+        );
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to update purchase", error });
+      }
+    });
+
+    // DELETE - Remove Purchase
+    app.delete("/purchases/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const result = await purchasesCollection.deleteOne({ _id: new ObjectId(id) });
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to delete purchase", error });
+      }
+    });
+
+    // PATCH - Mark Purchase as returned
+    app.patch("/purchases/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const { status } = req.body;
+
+        const result = await purchasesCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { status } }
+        );
+
+        if (result.modifiedCount > 0) {
+          res.json({ success: true, message: "Purchase returned successfully" });
+        } else {
+          res.status(404).json({ success: false, message: "Purchase not found" });
+        }
+      } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: "Server error" });
+      }
+    });
+
 
 
     // Get all products
