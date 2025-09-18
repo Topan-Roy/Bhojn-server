@@ -59,26 +59,69 @@ async function run() {
       const result = await usersCollection.findOne(query);
       res.send(result)
     })
-    // PUT - Update user profile
-    app.put("/users/:id", async (req, res) => {
-      const id = req.params.id;
-      const updateData = req.body;
-
+    
+       // user role get by email
+app.get("/users/:email", async (req, res) => {
+  const email = req.params.email;
+  const user = await usersCollection.findOne({ email: email });
+  res.send(user || {});
+});
+    // Get all users
+    app.get("/api/admin/users", async (req, res) => {
       try {
-        const result = await usersCollection.updateOne(
-          { _id: new ObjectId(id) },
-          { $set: updateData }
-        );
-
-        if (result.modifiedCount > 0) {
-          res.status(200).send({ success: true, message: "Profile updated successfully" });
-        } else {
-          res.status(404).send({ success: false, message: "No changes made or user not found" });
-        }
-      } catch (error) {
-        res.status(500).send({ success: false, message: "Update failed", error });
+        const users = await usersCollection.find().toArray();
+        res.json({ success: true, users });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: "Server error" });
       }
     });
+
+    // Update user role (Admin <-> User)
+    app.patch("/api/admin/users/:id/role", async (req, res) => {
+      try {
+        const { role } = req.body;
+        const { id } = req.params;
+        const result = await usersCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { role } }
+        );
+        res.json({ success: true, message: "Role updated", result });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: "Server error" });
+      }
+    });
+
+    // Update user info (name, email, etc.)
+    app.put("/api/admin/users/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+        const updateDoc = req.body;
+        const result = await usersCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: updateDoc }
+        );
+        res.json({ success: true, message: "User updated", result });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: "Server error" });
+      }
+    });
+
+    // Delete user
+    app.delete("/api/admin/users/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+        const result = await usersCollection.deleteOne({ _id: new ObjectId(id) });
+        res.json({ success: true, message: "User deleted", result });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: "Server error" });
+      }
+    });
+
+ 
 
 
     // Get all products
