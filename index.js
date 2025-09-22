@@ -34,6 +34,9 @@ async function run() {
     const categoriesCollection = db.collection("categories");
     const bookingsCollection = db.collection("bookings");
     const purchasesCollection = db.collection("purchases");
+    const bookingsCollection1 = db.collection("booking");
+
+
     // ✅ Register Route
     app.post("/api/register", async (req, res) => {
       try {
@@ -121,6 +124,130 @@ async function run() {
         res.status(500).json({ success: false, message: "Server error" });
       }
     });
+
+    // GET all bookings
+    app.get("/api/bookings", async (req, res) => {
+      try {
+        const bookings = await bookingsCollection1.find({}).toArray();
+        res.status(200).json({ success: true, bookings });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: "Server Error" });
+      }
+    });
+
+    // Check Availability API
+    app.get("/api/reservations/check", async (req, res) => {
+      try {
+        const { date, time } = req.query;
+
+        if (!date || !time) {
+          return res.status(400).json({ success: false, message: "Missing fields" });
+        }
+
+        const MAX_TABLES = 20;
+        const [hour, min] = time.split(":").map(Number);
+        const requestedStart = new Date(`${date}T${time}:00`);
+        const requestedEnd = new Date(requestedStart.getTime() + 2 * 60 * 60 * 1000);
+
+        const existingReservations = await bookingsCollection1.find({ date }).toArray();
+        const tables = [];
+        for (let i = 1; i <= MAX_TABLES; i++) {
+          const overlapping = existingReservations.find(r => {
+            if (r.tableNo !== i) return false;
+            const rStart = new Date(`${r.date}T${r.startTime}`);
+            const rEnd = new Date(`${r.date}T${r.endTime}`);
+            return (requestedStart < rEnd) && (requestedEnd > rStart);
+          });
+          tables.push({
+            tableNo: i,
+            status: overlapping ? "Booked" : "Free",
+            reservationId: overlapping?._id || null,
+            customer: overlapping ? overlapping.customer : null,
+          });
+        }
+
+        const available = tables.some(t => t.status === "Free");
+
+        res.json({ success: true, available, tables });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: "Server error" });
+      }
+    });
+
+    // Confirm Reservation API
+    app.post("/api/reservations", async (req, res) => {
+      try {
+        const { date, tableNo, time, people, customer } = req.body;
+
+        if (!date || !tableNo || !time || !people || !customer) {
+          return res.status(400).json({ success: false, message: "Missing fields" });
+        }
+
+        const startTime = time;
+        const startDate = new Date(`${date}T${startTime}:00`);
+        const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000);
+        const endTime = `${String(endDate.getHours()).padStart(2, "0")}:${String(endDate.getMinutes()).padStart(2, "0")}:00`;
+        const overlapping = await bookingsCollection1.findOne({
+          date,
+          tableNo,
+          $or: [
+            { startTime: { $lt: endTime }, endTime: { $gt: startTime } }
+          ]
+        });
+
+        if (overlapping) {
+          return res.status(400).json({ success: false, message: "Table already booked for this slot" });
+        }
+
+        const reservation = {
+          customer,
+          tableNo,
+          people: Number(people),
+          startTime,
+          endTime,
+          date,
+          status: "Booked",
+          createdAt: new Date(),
+        };
+
+        await bookingsCollection1.insertOne(reservation);
+        res.status(201).json({ success: true, reservation });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: "Server error" });
+      }
+    });
+
+    // DELETE reservation
+    app.delete("/api/admin/bookings/:id", async (req, res) => {
+      const { id } = req.params;
+      try {
+        await bookingsCollection1.deleteOne({ _id: new ObjectId(id) });
+        res.json({ success: true, message: "Deleted successfully" });
+      } catch (err) {
+        res.status(500).json({ success: false, message: "Error deleting" });
+      }
+    });
+
+    // PATCH status
+    app.patch("/api/admin/bookings/:id", async (req, res) => {
+      const { id } = req.params;
+      const { status } = req.body;
+      try {
+        await bookingsCollection1.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { status } }
+        );
+        res.json({ success: true, message: "Status updated" });
+      } catch (err) {
+        res.status(500).json({ success: false, message: "Error updating status" });
+      }
+    });
+
+
+
 
     // POST - Create Purchase
     app.post("/purchases", async (req, res) => {
