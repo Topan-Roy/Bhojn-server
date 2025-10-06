@@ -1,6 +1,7 @@
 const express = require('express');
-const cors = require('cors');
-const dotenv = require('dotenv');
+const cors = require("cors");
+
+const dotenv = require('dotenv')
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 dotenv.config();
@@ -36,7 +37,6 @@ async function run() {
     const purchasesCollection = db.collection("purchases");
     const bookingsCollection1 = db.collection("booking");
 
-
     // ✅ Register Route
     app.post("/api/register", async (req, res) => {
       try {
@@ -57,12 +57,12 @@ async function run() {
       res.send(result);
     })
 
-    app.get('/users/:email', async (req, res) => {
-      const email = req.params.email;
-      const query = { email: email }
-      const result = await usersCollection.findOne(query);
-      res.send(result)
-    })
+    // app.get('/users/:email', async (req, res) => {
+    //   const email = req.params.email;
+    //   const query = { email: email }
+    //   const result = await usersCollection.findOne(query);
+    //   res.send(result)
+    // })
 
     // user role get by email
     app.get("/users/:email", async (req, res) => {
@@ -189,7 +189,7 @@ async function run() {
         const startDate = new Date(`${date}T${startTime}:00`);
         const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000);
         const endTime = `${String(endDate.getHours()).padStart(2, "0")}:${String(endDate.getMinutes()).padStart(2, "0")}:00`;
-        const overlapping = await bookingsCollection1.findOne({
+        const overlapping = await bookingsCollection.findOne({
           date,
           tableNo,
           $or: [
@@ -224,7 +224,7 @@ async function run() {
     app.delete("/api/admin/bookings/:id", async (req, res) => {
       const { id } = req.params;
       try {
-        await bookingsCollection1.deleteOne({ _id: new ObjectId(id) });
+        await bookingsCollection.deleteOne({ _id: new ObjectId(id) });
         res.json({ success: true, message: "Deleted successfully" });
       } catch (err) {
         res.status(500).json({ success: false, message: "Error deleting" });
@@ -236,7 +236,7 @@ async function run() {
       const { id } = req.params;
       const { status } = req.body;
       try {
-        await bookingsCollection1.updateOne(
+        await bookingsCollection.updateOne(
           { _id: new ObjectId(id) },
           { $set: { status } }
         );
